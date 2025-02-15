@@ -20,7 +20,6 @@ resource "azurerm_virtual_network" "vnet" {
   resource_group_name = azurerm_resource_group.rg.name
 }
 
-
 # Define the subnet
 resource "azurerm_subnet" "webserver" {
   name                 = "${var.labelPrefix}A05Subnet"
@@ -31,7 +30,7 @@ resource "azurerm_subnet" "webserver" {
 
 # Define network security group and rules
 resource "azurerm_network_security_group" "webserver" {
-  name                = "${var.labelPrefix}A05SG" # mckennrA05SG
+  name                = "${var.labelPrefix}A05SG"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -62,6 +61,9 @@ resource "azurerm_network_security_group" "webserver" {
 
 # Define the network interface
 resource "azurerm_network_interface" "webserver" {
+  # Ensure subnet is created first
+  depends_on = [azurerm_subnet.webserver]
+
   name                = "${var.labelPrefix}A05Nic"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
@@ -76,6 +78,9 @@ resource "azurerm_network_interface" "webserver" {
 
 # Link the security group to the NIC
 resource "azurerm_network_interface_security_group_association" "webserver" {
+  # Ensure the VM is destroyed before removing the NSG association
+  depends_on = [azurerm_linux_virtual_machine.webserver]
+
   network_interface_id      = azurerm_network_interface.webserver.id
   network_security_group_id = azurerm_network_security_group.webserver.id
 }
@@ -88,13 +93,15 @@ data "cloudinit_config" "init" {
   part {
     filename     = "init.sh"
     content_type = "text/x-shellscript"
-
-    content = file("${path.module}/init.sh")
+    content      = file("${path.module}/init.sh")
   }
 }
 
 # Define the virtual machine
 resource "azurerm_linux_virtual_machine" "webserver" {
+  # Ensure the NIC is created before the VM
+  depends_on = [azurerm_network_interface.webserver]
+
   name                  = "${var.labelPrefix}A05VM"
   resource_group_name   = azurerm_resource_group.rg.name
   location              = azurerm_resource_group.rg.location
